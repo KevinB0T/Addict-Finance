@@ -1,5 +1,5 @@
 /**
-    5% Liquidity pool 
+    5% Liquidity pool
     4% lottery wallet (accessible by the Dev team)
     2% distributed across holders
     1% Burn (sent to a dead wallet)- 0x0000000000000000000000000000000000000001
@@ -683,7 +683,7 @@ contract Pausable is Ownable {
 
     bool private _paused;
 
-    modifier whenNotPaused() 
+    modifier whenNotPaused()
     {
         require(!_paused, "Pausable: paused");
         _;
@@ -697,24 +697,24 @@ contract Pausable is Ownable {
     constructor() internal {}
 
     function paused(
-    ) public view returns (bool) 
+    ) public view returns (bool)
     {
         return _paused;
     }
 
     function pause(
-    ) public 
-        onlyOwner 
-        whenNotPaused 
+    ) public
+        onlyOwner
+        whenNotPaused
     {
         _paused = true;
         emit Paused(msg.sender);
     }
 
     function unpause(
-    ) public 
-        onlyOwner 
-        whenPaused 
+    ) public
+        onlyOwner
+        whenPaused
     {
         _paused = false;
         emit Unpaused(msg.sender);
@@ -727,26 +727,26 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
 
     mapping (address => uint256) private _rOwned;
     mapping (address => uint256) private _tOwned;
-    
+
     mapping (address => mapping (address => uint256)) private _allowances;
 
     mapping (address => bool) private _isExcludedFromFee;
 
     mapping (address => bool) private _isExcluded;
     address[] private _excluded;
-   
+
     uint256 private constant MAX = ~uint256(0);
-    uint256 private _tTotal = 1000000000000000 * 10**18;
+    uint256 private _tTotal = 1000000000000000 * 10**9;
     uint256 private _rTotal = (MAX - (MAX % _tTotal));
     uint256 private _tFeeTotal;
 
     string private _name = "Addict Finance";
     string private _symbol = "ADDICT";
-    uint8 private _decimals = 18;
-    
+    uint8 private _decimals = 9;
+
     uint256 public _taxFee = 2;
     uint256 private _previousTaxFee = _taxFee;
-    
+
     uint256 public _liquidityFee = 5;
     uint256 private _previousLiquidityFee = _liquidityFee;
 
@@ -761,18 +761,19 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
 
     IPancakeRouter02 public pancakeRouter;
     address public immutable pancakePair;
-    
+
     bool inSwapAndLiquify;
     bool public swapAndLiquifyEnabled = true;
-                               
-    uint256 public _maxTxAmount = 5000000000000 * 10**18;
-    uint256 private numTokensSellToAddToLiquidity = 5000000000000 * 10**18;
-    
+
+    uint256 public _maxTxAmount = 5000000000000 * 10**9;
+    uint256 private numTokensSellToAddToLiquidity = 5000000000000 * 10**9;
+    bool private cooldownEnabled = true;
+
     address public _burnAddress;
     address public _devMarketingAddress = 0x83aDE1Cd296beCBbf537f624D3f5Ef776Be47592;
     address public _lotteryAddress = 0x9B299784E8FEA10af979Ffe0dE3A6F40E9472A2a;
     address public _routerAddress = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
-    
+
     mapping (address => uint256) private coolDowns;
 
     event MinTokensBeforeSwapUpdated(uint256 minTokensBeforeSwap);
@@ -782,16 +783,16 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
         uint256 ethReceived,
         uint256 tokensIntoLiquidity
     );
-    
+
     modifier lockTheSwap {
         inSwapAndLiquify = true;
         _;
         inSwapAndLiquify = false;
     }
-    
+
     constructor () public {
         _rOwned[_msgSender()] = _rTotal;
-        
+
         IPancakeRouter02 _pancakeRouter = IPancakeRouter02(_routerAddress);
         // Create a pancakeswap pair for this new token
         pancakePair = IPancakeFactory(_pancakeRouter.factory())
@@ -803,10 +804,10 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
 
         _isExcludedFromFee[owner()] = true;
         _isExcludedFromFee[address(this)] = true;
-        
+
         _isExcluded[_burnAddress] = true;
         _excluded.push(_burnAddress);
-        
+
         emit Transfer(address(0), _msgSender(), _tTotal);
     }
 
@@ -910,13 +911,13 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
             if (_excluded[i] == account) {
                 _excluded[i] = _excluded[_excluded.length - 1];
                 _tOwned[account] = 0;
-                _isExcluded[account] = false;   
+                _isExcluded[account] = false;
                 _excluded.pop();
                 break;
             }
         }
     }
-    
+
     function _transferBothExcluded(address sender, address recipient, uint256 tAmount) private {
         uint256 rAmount = tAmount.mul(_getRate());
         uint256 rTransferAmount = rAmount;
@@ -924,23 +925,27 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
         _tOwned[sender] = _tOwned[sender].sub(tAmount);
         _rOwned[sender] = _rOwned[sender].sub(rAmount);
         _tOwned[recipient] = _tOwned[recipient].add(tTransferAmount);
-        _rOwned[recipient] = _rOwned[recipient].add(rTransferAmount);        
+        _rOwned[recipient] = _rOwned[recipient].add(rTransferAmount);
         emit Transfer(sender, recipient, tTransferAmount);
     }
-    
+
     function excludeFromFee(address account) public onlyOwner whenNotPaused {
         _isExcludedFromFee[account] = true;
     }
-    
+
     function includeInFee(address account) public onlyOwner whenNotPaused {
         _isExcludedFromFee[account] = false;
+    }
+
+    function setCooldownEnabled(bool onoff) external onlyOwner() {
+        cooldownEnabled = onoff;
     }
 
     function setRouterAddress(address _address) external onlyOwner() {
         _routerAddress = _address;
         IPancakeRouter02 _pancakeRouter = IPancakeRouter02(_routerAddress);
         pancakeRouter = _pancakeRouter;
-    }    
+    }
 
     function setDevMarketingAddress(address account) external onlyOwner() {
         _devMarketingAddress = account;
@@ -949,11 +954,11 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
     function setLotteryAddress(address account) external onlyOwner() {
         _lotteryAddress = account;
     }
-    
+
     function setTaxFeePercent(uint256 taxFee) external onlyOwner() whenNotPaused {
         _taxFee = taxFee;
     }
-    
+
     function setLiquidityFeePercent(uint256 liquidityFee) external onlyOwner() whenNotPaused {
         _liquidityFee = liquidityFee;
     }
@@ -970,7 +975,7 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
         _burnFee = burnFee;
     }
 
-   
+
     function setMaxTxPercent(uint256 maxTxPercent) external onlyOwner() whenNotPaused {
         _maxTxAmount = _tTotal.mul(maxTxPercent).div(
             10**2
@@ -984,7 +989,7 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
 
     function burn(address sender, uint256 _burnAmount) external onlyOwner whenNotPaused{
         require(sender != address(0), "BEP 20: burn from the zero address");
-        
+
         _burnTokenFromWallet(sender, _burnAmount);
     }
 
@@ -1023,7 +1028,7 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
 
     function _getCurrentSupply() private view returns(uint256, uint256) {
         uint256 rSupply = _rTotal;
-        uint256 tSupply = _tTotal;      
+        uint256 tSupply = _tTotal;
         for (uint256 i = 0; i < _excluded.length; i++) {
             if (_rOwned[_excluded[i]] > rSupply || _tOwned[_excluded[i]] > tSupply) return (_rTotal, _tTotal);
             rSupply = rSupply.sub(_rOwned[_excluded[i]]);
@@ -1032,7 +1037,7 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
         if (rSupply < _rTotal.div(_tTotal)) return (_rTotal, _tTotal);
         return (rSupply, tSupply);
     }
-    
+
     function _takeLiquidity(uint256 tLiquidity) private {
         uint256 currentRate =  _getRate();
         uint256 rLiquidity = tLiquidity.mul(currentRate);
@@ -1040,11 +1045,11 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
         if(_isExcluded[address(this)])
             _tOwned[address(this)] = _tOwned[address(this)].add(tLiquidity);
     }
-    
+
     function calculateTaxFee(uint256 _amount) private view returns (uint256) {
         return _amount.mul(_taxFee).div(
             10**2
-        );    
+        );
     }
 
     function calculateLiquidityFee(uint256 _amount) private view returns (uint256) {
@@ -1064,7 +1069,7 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
            10**2
         );
     }
-    
+
     function calculateLotteryFee(uint256 _amount) private view returns (uint256){
         return _amount.mul(_lotteryFee).div(
            10**2
@@ -1073,20 +1078,20 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
 
     function removeAllFee() private {
         if(_taxFee == 0 && _liquidityFee == 0) return;
-        
+
         _previousTaxFee = _taxFee;
         _previousLiquidityFee = _liquidityFee;
         _previousDevMarketingFee = _devMarketingFee;
         _previousLotteryFee = _lotteryFee;
         _previousBurnFee = _burnFee;
-        
+
         _taxFee = 0;
         _liquidityFee = 0;
         _devMarketingFee = 0;
         _lotteryFee = 0;
         _burnFee = 0;
     }
-    
+
     function restoreAllFee() private {
         _taxFee = _previousTaxFee;
         _liquidityFee = _previousLiquidityFee;
@@ -1094,7 +1099,7 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
         _lotteryFee = _previousLotteryFee;
         _burnFee = _previousBurnFee;
     }
-    
+
     function isExcludedFromFee(address account) public view returns(bool) {
         return _isExcludedFromFee[account];
     }
@@ -1115,20 +1120,22 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
         require(from != address(0), "BEP20: transfer from the zero address");
         require(to != address(0), "BEP20: transfer to the zero address");
         require(amount > 0, "Transfer amount must be greater than zero");
-        
-        if(from != owner() && to != owner())
+
+        if(from != owner() && to != owner()) {
             require(amount <= _maxTxAmount, "Transfer amount exceeds the maxTxAmount.");
-        
-        if(from != owner() && to != owner())
-            require(block.timestamp - coolDowns[_msgSender()] > 60 seconds, "You can not transfer token until next 1 minute.");
-        
+
+            if (to == pancakePair && from != address(pancakeRouter) && ! _isExcludedFromFee[to] && cooldownEnabled) {
+                require(block.timestamp - coolDowns[from] > 60 seconds, "You can not transfer token until next 1 minute.");
+            }
+        }
+
         uint256 contractTokenBalance = balanceOf(address(this));
-        
+
         if(contractTokenBalance >= _maxTxAmount)
         {
             contractTokenBalance = _maxTxAmount;
         }
-        
+
         bool overMinTokenBalance = contractTokenBalance >= numTokensSellToAddToLiquidity;
         if (
             overMinTokenBalance &&
@@ -1139,10 +1146,10 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
             //add liquidity
             swapAndLiquify(contractTokenBalance);
         }
-        
+
         //indicates if fee should be deducted from transfer
         bool takeFee = true;
-        
+
         //if any account belongs to _isExcludedFromFee account then remove the fee
         if(_isExcludedFromFee[from] || _isExcludedFromFee[to]){
             takeFee = false;
@@ -1155,12 +1162,12 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
 
             uint256 toBurn = calculateBurnFee(amount);
             (,,uint256 rFee,,uint256 tFee,) = _getValues(amount);
-            
+
 
             uint256 feeTotal = toDevMarket.add(toLottery).add(tFee).add(toBurn).add(toLiquidity);
-            
+
             amount = amount.sub(feeTotal);
-            
+
             _tokenTransfer(from,to,amount, false);
             _tokenTransfer(from, _devMarketingAddress, toDevMarket, false);
             _tokenTransfer(from, _lotteryAddress, toLottery, false);
@@ -1172,8 +1179,10 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
         else{
             _tokenTransfer(from,to,amount, takeFee);
         }
-        
-        coolDowns[_msgSender()] = block.timestamp;
+
+        if(from != pancakePair && from != address(pancakeRouter)) {
+            coolDowns[from] = block.timestamp;
+        }
     }
 
     function swapAndLiquify(uint256 contractTokenBalance) private lockTheSwap {
@@ -1195,7 +1204,7 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
 
         // add liquidity to pancakeswap
         addLiquidity(otherHalf, newBalance);
-        
+
         emit SwapAndLiquify(half, newBalance, otherHalf);
     }
 
@@ -1236,7 +1245,7 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
     function _tokenTransfer(address sender, address recipient, uint256 amount,bool takeFee) private {
         if(!takeFee)
             removeAllFee();
-        
+
         if (!_isExcluded[sender] && _isExcluded[recipient]) {
             _transferToExcluded(sender, recipient, amount);
         } else if (!_isExcluded[sender] && !_isExcluded[recipient]) {
@@ -1246,7 +1255,7 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
         } else {
             _transferStandard(sender, recipient, amount);
         }
-        
+
         if(!takeFee)
             restoreAllFee();
     }
@@ -1266,7 +1275,7 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
         uint256 tTransferAmount = tAmount;
         _rOwned[sender] = _rOwned[sender].sub(rAmount);
         _tOwned[recipient] = _tOwned[recipient].add(tTransferAmount);
-        _rOwned[recipient] = _rOwned[recipient].add(rTransferAmount);           
+        _rOwned[recipient] = _rOwned[recipient].add(rTransferAmount);
         emit Transfer(sender, recipient, tTransferAmount);
     }
 
@@ -1276,10 +1285,10 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
         uint256 tTransferAmount = tAmount;
         _tOwned[sender] = _tOwned[sender].sub(tAmount);
         _rOwned[sender] = _rOwned[sender].sub(rAmount);
-        _rOwned[recipient] = _rOwned[recipient].add(rTransferAmount);   
+        _rOwned[recipient] = _rOwned[recipient].add(rTransferAmount);
         emit Transfer(sender, recipient, tTransferAmount);
     }
-    
+
     function _burnTokenFromWallet(address sender, uint256 _burnAmount) private{
 
         if (_burnAmount == 0){
@@ -1288,7 +1297,7 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
 
         uint256 currentRate =  _getRate();
         uint256 rBurn = _burnAmount.mul(currentRate);
-        
+
         if(_isExcluded[sender]){
             _tOwned[sender] = _tOwned[sender].sub(_burnAmount);
             _tOwned[_burnAddress] = _tOwned[_burnAddress].add(_burnAmount);
@@ -1300,7 +1309,7 @@ contract AddictFinance is Context, IBEP20, Ownable, Pausable {
 
         emit Transfer(sender, _burnAddress, _burnAmount);
     }
-    
+
     function _burnToken(uint256 _burnAmount) private{
         if (_burnAmount == 0){
             return;
